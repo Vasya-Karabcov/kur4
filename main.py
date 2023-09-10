@@ -5,11 +5,10 @@ def main():
     vacancies_json = []
     keyword = input("Введите ключевое слово для поиска: ")
 
-    hh = HeadHunter(keyword)
+    # hh = HeadHunter(keyword)
     sj = SuperJob(keyword)
 
-
-    for api in (hh, sj):
+    for api in (sj,):
         api.get_vacancies(pages_count=10)
         vacancies_json.extend(api.get_formatted_vacancies())
 
@@ -22,8 +21,8 @@ def main():
 
             if command.lower() == "1":
                 vacancies = connector.select()
-             # elif command.lower() == "2":
-             #     vacancies = sort_by_salary_from()
+            # elif command.lower() == "2":
+            #     vacancies = sort_by_salary_from()
 
             for vacancy in vacancies:
                 print(vacancy, end='\n')
