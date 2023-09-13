@@ -8,7 +8,7 @@ from utils import get_currencies
 
 
 class Engine(ABC):
-
+    """абстрактный класс для классов HH, SJ"""
     @abstractmethod
     def get_request(self):
         pass
@@ -19,23 +19,28 @@ class Engine(ABC):
 
 
 class HeadHunter(Engine):
+    """Класс для работы с HH"""
     url = "https://api.hh.ru/vacancies"
 
     def __init__(self, keyword):
         self.params = {
             "per_page": 100,
-            "page": None,
+            "page": 1,
             "text": keyword,
+            'only_with_salary': True,
         }
         self.vacancies = []
 
     def get_request(self):
+        """Получаем json файл"""
         response = requests.get(self.url, params=self.params)
         if response.status_code != 200:
             raise ParsingError(f" Ошибка получения вакансий")
-        return response.json()["items"]
+        else:
+            return response.json()["items"]
 
     def get_vacancies(self, pages_count=2):
+        """Получаем вакансии с сайта"""
         self.vacancies = []
         for page in range(pages_count):
             page_vacancies = []
@@ -51,17 +56,37 @@ class HeadHunter(Engine):
             if len(page_vacancies) == 0:
                 break
 
-    def get_formated_vacancies(self):
+    def get_formatted_vacancies(self):
+        """Форматирует вакансии"""
         formatted_vacancies = []
         currencies = get_currencies()
-        sj_currencies = {
-            "rub": "RUB",
-            "uah": "UAH",
-            "uzs": "UZS",
-        }
+
+        for vacancy in self.vacancies:
+            formatted_vacancy = {
+                "employer": vacancy["employer"]["name"],
+                "title": vacancy["name"],
+                "url": vacancy["url"],
+                "api": "HeadHunter",
+                "salary_from": vacancy["salary"]["from"] if vacancy["salary"] else None,
+                "salary_to": vacancy["salary"]["to"] if vacancy["salary"] else None,
+            }
+
+            if vacancy["salary"]["currency"] == "RUR":
+                vacancy["salary"]["currency"] = 'RUB'
+            if vacancy["salary"]["currency"] == "BYR":
+                vacancy["salary"]["currency"] = 'BYN'
+
+            formatted_vacancy["currency"] = vacancy["salary"]["currency"]
+            formatted_vacancy["currency_value"] = currencies[vacancy["salary"]["currency"]]
+
+
+            formatted_vacancies.append(formatted_vacancy)
+
+        return formatted_vacancies
 
 
 class SuperJob(Engine):
+    """Класс для работы с SJ"""
     url = "https://api.superjob.ru/2.0/vacancies/"
 
     def __init__(self, keyword):
@@ -76,12 +101,14 @@ class SuperJob(Engine):
         self.vacancies = []
 
     def get_request(self):
+        """Получаем json файл"""
         response = requests.get(self.url, headers=self.headers, params=self.params)
         if response.status_code != 200:
             raise ParsingError(f" Ошибка получения вакансий")
         return response.json()["objects"]
 
     def get_formatted_vacancies(self):
+        """Форматирует вакансии"""
         formatted_vacancies = []
         currencies = get_currencies()
         sj_currencies = {
@@ -93,16 +120,19 @@ class SuperJob(Engine):
         for vacancy in self.vacancies:
             formatted_vacancy = {
                 "employer": vacancy["firm_name"],
-                "tittle": vacancy["profession"],
+                "title": vacancy["profession"],
                 "url": vacancy["link"],
                 "api": "SuperJob",
-                "salary_from": vacancy["payment_from"] if vacancy["payment_from"] and vacancy["payment_from"] != 0 else None,
+                "salary_from": vacancy["payment_from"] if vacancy["payment_from"] and vacancy[
+                    "payment_from"] != 0 else None,
                 "salary_to": vacancy["payment_to"] if vacancy["payment_to"] and vacancy["payment_to"] != 0 else None,
             }
 
             if vacancy["currency"] in sj_currencies:
                 formatted_vacancy["currency"] = sj_currencies[vacancy["currency"]]
-                formatted_vacancy["currency_value"] = currencies[sj_currencies[vacancy["currency"]]] if sj_currencies[vacancy["currency"]] in currencies else 1
+                formatted_vacancy["currency_value"] = currencies[sj_currencies[vacancy["currency"]]] if sj_currencies[
+                                                                                                            vacancy[
+                                                                                                                "currency"]] in currencies else 1
             elif vacancy["currency"]:
                 formatted_vacancy["currency"] = "RUB"
                 formatted_vacancy["currency_value"] = 1
@@ -114,10 +144,8 @@ class SuperJob(Engine):
 
         return formatted_vacancies
 
-
-
-
     def get_vacancies(self, pages_count=2):
+        """Получаем вакансии с сайта"""
         self.vacancies = []
         for page in range(pages_count):
             page_vacancies = []
@@ -135,6 +163,7 @@ class SuperJob(Engine):
 
 
 class Vacancy:
+    """Класс для вакансий"""
     def __init__(self, vacancy):
         self.employer = vacancy["employer"]
         self.title = vacancy["title"]
@@ -153,8 +182,16 @@ class Vacancy:
 Ссылка: {self.url}
         """
 
+    def __lt__(self, other):
+        if other.salary_from is None: # Чтобы NONE > 0
+            return True
+        if self.salary_from is None:
+            return False
+        return self.salary_from < other.salary_from
+
 
 class Connector:
+    """Класс для работы с json"""
     def __init__(self, keyword, vacancies_json):
         self.filename = f"{keyword.title()}.json"
         self.insert(vacancies_json)
@@ -168,3 +205,4 @@ class Connector:
             vacancies = json.load(file)
 
         return [Vacancy(x) for x in vacancies]
+

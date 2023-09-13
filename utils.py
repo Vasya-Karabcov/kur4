@@ -1,16 +1,22 @@
-from ast import parse
 
 import requests
 
 
-def get_currencies():
-    response = requests.get("http://www.cbr.ru/scripts/xml_daily.asp")
+from exceptions import ParsingError
 
-    currencies = parse(response.content)
-    formatted_currencies = {}
-    for currency in currencies["ValCurs"]["Valute"]:
-        value = float(currency["Value"].replace(",", "."))
-        nominal = float(currency["Nominal"])
-        formatted_currencies[currency["CharCode"]] = value / nominal
-    formatted_currencies["RUB"] = 1
-    return formatted_currencies
+
+def get_currencies():
+    """Сортировка по валютам"""
+    response = requests.get('https://www.cbr-xml-daily.ru/daily_json.js')
+
+    try:
+        if response.status_code != 200:
+            raise ParsingError(f"Ошибка получения валют")
+        currencies = response.json()
+        formatted_currencies = {}
+        for key, data in currencies['Valute'].items():
+            formatted_currencies[key] = data['Value']
+        formatted_currencies["RUB"] = 1
+        return formatted_currencies
+    except ParsingError as error:
+        print(error)
